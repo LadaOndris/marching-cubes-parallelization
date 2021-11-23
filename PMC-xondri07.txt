@@ -1,6 +1,6 @@
 Architektury Výpočetních Systémů (AVS 2021)
 Projekt č. 2 (PMC)
-Login: xlogin00
+Login: xondri07
 
 Úloha 1: Paralelizace původního řešení
 ===============================================================================
@@ -8,10 +8,30 @@ Login: xlogin00
 1) Kterou ze smyček (viz zadání) je vhodnější paralelizovat a co způsobuje 
    neefektivitu paralelizaci té druhé?
 
+Vhodnější je paralelizovat marchCubes, protože je menší podíl režie vůči práci.
+V evaluateFieldAt žije každé vlákno pouze krátkou chvíli, a tudíž převažuje režie
+vláken.
+
 2) Jaké plánování (rozdělení práce mezi vlákna) jste zvolili a proč? 
    Jaký vliv má velikost "chunk" při dynamickém plánování (8, 16, 32, 64)?
 
+Přibližná měření pro ../data/bun_zipper_res4.pts bun_zipper_res4.obj:
+static : 30 - 50 ms
+guided : 29 - 56 ms
+dynamic,8 : 31 - 43 ms
+dynamic,16 : 30 - 45 ms
+dynamic,32 : 32 - 59 ms
+dynamic,64 : 27 - 37 ms
+
+Nejlepší volbou se zdá být dynamic,64. Rozdíly však nejsou podstatné.
+
 3) Jakým způsobem zajišťujete ukládání trojúhelníků z několika vláken současně?
+
+Přidávání do vektoru trojúhelníku je kritická sekce, tudíž je potřeba zajistit
+výlučný přístup. To je možné označit pragmou jako kritickou sekci.
+
+Alternativní a efektivnější je vytvořit pomocná pole pro každé vlákno a na
+konci marchCubes sesypat trojúhelníky do jednoho vektoru.
 
 
 Úloha 2: Paralelní průchod stromem
@@ -19,12 +39,62 @@ Login: xlogin00
 
 1) Stručně popište použití OpenMP tasků ve vašem řešení.
 
+Nejprve jsem definoval paralelní sekci uvnitř které jsem spustil
+rekurzivní marchCubes pouze jediným vláknem (single).
+
+Při dělení krychle na 8 podkrychlí se výpočet každé podkrychle spočítá
+v rámci jednoho tasku. Hned za vytvořením těchto tasků musí být taskwait,
+který zajistí, že se nebude pokračovat, pokud se vytvořené tasky neprovedou.
+
 2) Jakým způsobem jste realizovali sesbírání celkového počtu trojúhelníků?
+
+Všech 8 tasků má sdílenou proměnnou. V rámci kžadého tasku se návratová
+hodnota uloží do lokální proměnné a následně se přičte do sdílené proměnné.
+Toto uložení musí být provedeno atomicky.
 
 3) Jaký vliv má na vaše řešení tzv. "cut-off"? Je vhodné vytvářet nový 
    task pro každou krychli na nejnižší úrovni?
 
+Nastavení cut-off zamezí příliš velkému množství vytvořených tasků, protože
+každý task přináší jistou režii. Při zanořování exponenciálně vzrůstá počet vytvořených
+tasků. Tudíž je vhodné omezit zahoření jen do určité úrovně. Pro moji
+implementaci se jedná o hodnotu mGridSize / 2^4.
+
+Experimenty s ruznou velikosti cutoff pro různá rozližení:
+
+bun_zipper_res4
+cutoff = mGridSize / 2^0: 635, 634, 634
+cutoff = mGridSize / 2^1: 91, 91, 163
+cutoff = mGridSize / 2^2: 49, 240, 155, 90, 89
+cutoff = mGridSize / 2^3: 164, 300, 174, 40, 95
+cutoff = mGridSize / 2^4: 46, 235, 94, 207, 96
+cutoff = mGridSize / 2^5: 51, 156, 41, 108, 71
+cutoff = mGridSize / 2^6: 46, 72, 48, 48, 46
+
+bun_zipper_res2
+cutoff = mGridSize / 2^0: 11604
+cutoff = mGridSize / 2^1: 1756, 1544, 1754
+cutoff = mGridSize / 2^2: 380, 379, 388
+cutoff = mGridSize / 2^3: 359, 487, 362
+cutoff = mGridSize / 2^4: 349, 347, 349
+cutoff = mGridSize / 2^5: 388, 460, 516
+cutoff = mGridSize / 2^6: 410, 403, 424
+cutoff = mGridSize / 2^7: 425, 430, 403
+cutoff = mGridSize / 2^8: 394, 491, 402
+
+bun_zipper_res1
+cutoff = mGridSize / 2^2: 1650, 1632
+cutoff = mGridSize / 2^3: 1549, 1554
+cutoff = mGridSize / 2^4: 1502, 1500; po nahrazeni kriticke sekce 1476, 1466
+cutoff = mGridSize / 2^6: 1708, 1872
+cutoff = mGridSize / 2^5: 1688, 1788
+
+Nejlépe vycházi cutoff pro pro mGridSize / 2^4.
+
 4) Jakým způsobem zajišťujete ukládání trojúhelníků z několika vláken současně?
+
+Ukládání do vektoru trojúhelníku je označeno jako kritická sekce, která zabrání
+souběžnému přístupu dvou vláken do tohoto vektoru.
 
 Úloha 3: Grafy škálování všech řešení
 ===============================================================================

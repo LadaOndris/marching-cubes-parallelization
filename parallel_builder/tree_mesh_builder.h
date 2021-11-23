@@ -16,13 +16,18 @@
 class TreeMeshBuilder : public BaseMeshBuilder
 {
 public:
-    TreeMeshBuilder(unsigned gridEdgeSize);
+    explicit TreeMeshBuilder(unsigned gridEdgeSize);
 
 protected:
     unsigned marchCubes(const ParametricScalarField &field);
+    unsigned marchCubesRecurse(const Vec3_t<float> &pos, int a, const ParametricScalarField &field);
     float evaluateFieldAt(const Vec3_t<float> &pos, const ParametricScalarField &field);
     void emitTriangle(const Triangle_t &triangle);
-    const Triangle_t *getTrianglesArray() const { return nullptr; }
+    const Triangle_t *getTrianglesArray() const { return mTriangles.data(); }
+    std::vector<Triangle_t> mTriangles; ///< Temporary array of triangles
+    std::vector<std::vector<Triangle_t>> threadsTriangles;
+private:
+    int cutoff = mGridSize / (1 << 4);
 };
 
 #endif // TREE_MESH_BUILDER_H
