@@ -25,8 +25,8 @@ unsigned TreeMeshBuilder::marchCubes(const ParametricScalarField &field) {
     // this class. This method will call itself to process the children.
     // It is also strongly suggested to first implement Octree as sequential
     // code and only when that works add OpenMP tasks to achieve parallelism.
-
-    std::vector<std::vector<Triangle_t>> triangles(36);
+    auto max_threads = omp_get_max_threads();
+    std::vector<std::vector<Triangle_t>> triangles(max_threads);
     threadsTriangles = triangles;
 
     unsigned totalTriangles;
@@ -86,12 +86,10 @@ unsigned TreeMeshBuilder::marchCubesRecurse(const Vec3_t<float> &pos, int a_int,
             for (auto &vec : vecs) {
 #pragma omp task default(none) shared(totalTriangles, field) firstprivate(pos, a_div2_int, vec)
                 {
-                    unsigned numTriangles = marchCubesRecurse(vec, a_div2_int, field);
-#pragma omp atomic
-                    totalTriangles += numTriangles;
+#pragma omp atomic update
+                    totalTriangles += marchCubesRecurse(vec, a_div2_int, field);
                 }
             }
-
 #pragma omp taskwait
             return totalTriangles;
         }
