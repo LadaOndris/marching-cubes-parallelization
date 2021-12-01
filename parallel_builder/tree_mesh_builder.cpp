@@ -18,6 +18,24 @@
 TreeMeshBuilder::TreeMeshBuilder(unsigned gridEdgeSize)
         : BaseMeshBuilder(gridEdgeSize, "Octree") {
 
+    // Initialize mGridSizes
+    for (unsigned box_width = mGridSize; box_width > 0; box_width /= 2) {
+        box_widths.push_back(box_width);
+        box_widths_float.push_back(static_cast<float>(box_width));
+
+        float limit = mIsoLevel + sqrt(3.0) / 2.0 * box_width;
+        limits.push_back(limit);
+
+        cubeCounts.push_back(box_width * box_width * box_width);
+    }
+
+    unsigned box_width = box_widths[cutoff_depth];
+    for (unsigned i = 0; i < cubeCounts[cutoff_depth]; ++i) {
+        Vec3_t<float> vec(i % box_width,
+                          (i / box_width) % box_width,
+                          i / (box_width * box_width));
+        cutoff_box_indices.push_back(vec);
+    }
 }
 
 unsigned TreeMeshBuilder::marchCubes(const ParametricScalarField &field) {
@@ -29,69 +47,69 @@ unsigned TreeMeshBuilder::marchCubes(const ParametricScalarField &field) {
     std::vector<std::vector<Triangle_t>> triangles(max_threads);
     threadsTriangles = triangles;
 
-    unsigned totalTriangles;
-#pragma omp parallel default(none) shared(field, totalTriangles)
+    for (auto &depth : box_widths_float) {
+        box_widths_physical.push_back(depth * mGridResolution);
+    }
+
+#pragma omp parallel default(none) firstprivate(field)
 #pragma omp single
     {
-        totalTriangles = marchCubesRecurse(Vec3_t<float>(0), mGridSize, field);
+        unsigned depth = 0;
+        Vec3_t<float> centerPoint((0 + box_widths[depth + 1]) * mGridResolution);
+        marchCubesRecurse(Vec3_t<float>(0), centerPoint, depth, field);
+#pragma omp taskwait
     };
 
-    for(auto const& triangleVector: threadsTriangles) {
+    for (auto const &triangleVector: threadsTriangles) {
         mTriangles.insert(std::end(mTriangles), std::begin(triangleVector), std::end(triangleVector));
     }
 
-    return totalTriangles;
+    return mTriangles.size();
 }
 
-unsigned TreeMeshBuilder::marchCubesRecurse(const Vec3_t<float> &pos, int a_int, const ParametricScalarField &field) {
-    auto a = static_cast<float>(a_int);
-    int a_div2_int = a_int / 2;
-    float a_div2 = static_cast<float>(a_div2_int);
+void
+TreeMeshBuilder::marchCubesRecurse(const Vec3_t<float> &pos, const Vec3_t<float> &centerPoint,
+                                   unsigned depth, const ParametricScalarField &field) {
+    float a_div2 = box_widths_float[depth + 1];
 
-    float limit = mIsoLevel + sqrt(3.0) / 2.0 * a;
-    Vec3_t<float> centerPoint((pos.x + a_div2) * mGridResolution,
-                              (pos.y + a_div2) * mGridResolution,
-                              (pos.z + a_div2) * mGridResolution);
-    float F_p = evaluateFieldAt(centerPoint, field);
-    if (F_p > limit) {
-        return 0;
+    // If we can't go any deeper.
+    if (depth == max_depth) {
+        buildCube(pos, field);
+    } else if (depth == cutoff_depth) {
+        unsigned cubesCount = cubeCounts[depth];
+        for (unsigned i = 0; i < cubesCount; ++i) {
+            Vec3_t<float> offset_index = cutoff_box_indices[i];
+            Vec3_t<float> cubeOffset(pos.x + offset_index.x,
+                                     pos.y + offset_index.y,
+                                     pos.z + offset_index.z);
+            buildCube(cubeOffset, field);
+        }
     } else {
-        // If we can't go any deeper.
-        if (a_int == 1) {
-            return buildCube(pos, field);
+        Vec3_t<float> vecs[8]{
+                Vec3_t<float>(pos.x, pos.y, pos.z),
+                Vec3_t<float>(pos.x + a_div2, pos.y, pos.z),
+                Vec3_t<float>(pos.x, pos.y + a_div2, pos.z),
+                Vec3_t<float>(pos.x + a_div2, pos.y + a_div2, pos.z),
+                Vec3_t<float>(pos.x, pos.y, pos.z + a_div2),
+                Vec3_t<float>(pos.x + a_div2, pos.y, pos.z + a_div2),
+                Vec3_t<float>(pos.x, pos.y + a_div2, pos.z + a_div2),
+                Vec3_t<float>(pos.x + a_div2, pos.y + a_div2, pos.z + a_div2)
+        };
+        float a_div4 = box_widths_physical[depth + 2];
+        for (auto &vec : vecs) {
+            Vec3_t<float> nextCenterPoint(vec.x * mGridResolution + a_div4,
+                                          vec.y * mGridResolution + a_div4,
+                                          vec.z * mGridResolution + a_div4);
 
-        } else if (a_int == cutoff) {
-            int cubesCount = a_int * a_int * a_int;
-            unsigned totalTriangles = 0;
-            for (int i = 0; i < cubesCount; ++i) {
-                Vec3_t<float> cubeOffset(pos.x + i % a_int,
-                                         pos.y + (i / a_int) % a_int,
-                                         pos.z + i / (a_int * a_int));
-                totalTriangles += buildCube(cubeOffset, field);
+            float F_p = evaluateFieldAt(centerPoint, field);
+            if (F_p > limits[depth + 1]) {
+                continue;
             }
-            return totalTriangles;
-        } else {
-            Vec3_t<float> vecs[8]{
-                    Vec3_t<float>(pos.x, pos.y, pos.z),
-                    Vec3_t<float>(pos.x + a_div2, pos.y, pos.z),
-                    Vec3_t<float>(pos.x, pos.y + a_div2, pos.z),
-                    Vec3_t<float>(pos.x + a_div2, pos.y + a_div2, pos.z),
-                    Vec3_t<float>(pos.x, pos.y, pos.z + a_div2),
-                    Vec3_t<float>(pos.x + a_div2, pos.y, pos.z + a_div2),
-                    Vec3_t<float>(pos.x, pos.y + a_div2, pos.z + a_div2),
-                    Vec3_t<float>(pos.x + a_div2, pos.y + a_div2, pos.z + a_div2)
-            };
 
-            unsigned totalTriangles = 0;
-            for (auto &vec : vecs) {
-#pragma omp task default(none) shared(totalTriangles, field) firstprivate(pos, a_div2_int, vec)
-                {
-#pragma omp atomic update
-                    totalTriangles += marchCubesRecurse(vec, a_div2_int, field);
-                }
+#pragma omp task default(none) firstprivate(vec, nextCenterPoint, depth, field)
+            {
+                marchCubesRecurse(vec, nextCenterPoint, depth + 1, field);
             }
-#pragma omp taskwait
-            return totalTriangles;
         }
     }
 }
@@ -108,6 +126,7 @@ float TreeMeshBuilder::evaluateFieldAt(const Vec3_t<float> &pos,
 
     // 2. Find minimum square distance from points "pos" to any point in the
     //    field.
+#pragma omp simd reduction(min:value)
     for (unsigned i = 0; i < count; ++i) {
         float distanceSquared = (pos.x - pPoints[i].x) * (pos.x - pPoints[i].x);
         distanceSquared += (pos.y - pPoints[i].y) * (pos.y - pPoints[i].y);
@@ -123,9 +142,6 @@ float TreeMeshBuilder::evaluateFieldAt(const Vec3_t<float> &pos,
 }
 
 void TreeMeshBuilder::emitTriangle(const BaseMeshBuilder::Triangle_t &triangle) {
-//#pragma omp critical
-//    mTriangles.push_back(triangle);
-
     int threadNum = omp_get_thread_num();
     threadsTriangles[threadNum].push_back(triangle);
 }

@@ -27,7 +27,8 @@ unsigned LoopMeshBuilder::marchCubes(const ParametricScalarField &field) {
     unsigned totalTriangles = 0;
     auto gridSize = mGridSize;
 
-    std::vector<std::vector<Triangle_t>> triangles(36);
+    auto max_threads = omp_get_max_threads();
+    std::vector<std::vector<Triangle_t>> triangles(max_threads);
     threadsTriangles = triangles;
 
     // 2. Loop over each coordinate in the 3D grid.
@@ -64,6 +65,8 @@ float LoopMeshBuilder::evaluateFieldAt(const Vec3_t<float> &pos, const Parametri
     // 2. Find minimum square distance from points "pos" to any point in the
     //    field.
     // #pragma omp parallel for schedule(runtime) default(none) firstprivate(count) reduction(min:value) shared(pPoints, pos)
+
+#pragma omp simd reduction(min:value)
     for (unsigned i = 0; i < count; ++i) {
         float distanceSquared = (pos.x - pPoints[i].x) * (pos.x - pPoints[i].x);
         distanceSquared += (pos.y - pPoints[i].y) * (pos.y - pPoints[i].y);
