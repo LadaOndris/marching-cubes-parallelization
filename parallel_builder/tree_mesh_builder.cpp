@@ -51,13 +51,19 @@ unsigned TreeMeshBuilder::marchCubes(const ParametricScalarField &field) {
         box_widths_physical.push_back(depth * mGridResolution);
     }
 
+    for (auto &point : field.getPoints()) {
+        pPointsX.push_back(point.x);
+        pPointsY.push_back(point.y);
+        pPointsZ.push_back(point.z);
+    }
+
+
 #pragma omp parallel default(none) firstprivate(field)
 #pragma omp single
     {
         unsigned depth = 0;
         Vec3_t<float> centerPoint((0 + box_widths[depth + 1]) * mGridResolution);
         marchCubesRecurse(Vec3_t<float>(0), centerPoint, depth, field);
-#pragma omp taskwait
     };
 
     for (auto const &triangleVector: threadsTriangles) {
@@ -126,11 +132,16 @@ float TreeMeshBuilder::evaluateFieldAt(const Vec3_t<float> &pos,
 
     // 2. Find minimum square distance from points "pos" to any point in the
     //    field.
+    const float *pointsX = pPointsX.data();
+    const float *pointsY = pPointsY.data();
+    const float *pointsZ = pPointsZ.data();
+
+
 #pragma omp simd reduction(min:value)
     for (unsigned i = 0; i < count; ++i) {
-        float distanceSquared = (pos.x - pPoints[i].x) * (pos.x - pPoints[i].x);
-        distanceSquared += (pos.y - pPoints[i].y) * (pos.y - pPoints[i].y);
-        distanceSquared += (pos.z - pPoints[i].z) * (pos.z - pPoints[i].z);
+        float distanceSquared = (pos.x - pointsX[i]) * (pos.x - pointsX[i]);
+        distanceSquared += (pos.y - pointsY[i]) * (pos.y - pointsY[i]);
+        distanceSquared += (pos.z - pointsZ[i]) * (pos.z - pointsZ[i]);
 
         // Comparing squares instead of real distance to avoid unnecessary
         // "sqrt"s in the loop.

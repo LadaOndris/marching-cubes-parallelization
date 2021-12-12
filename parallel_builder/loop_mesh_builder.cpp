@@ -31,6 +31,12 @@ unsigned LoopMeshBuilder::marchCubes(const ParametricScalarField &field) {
     std::vector<std::vector<Triangle_t>> triangles(max_threads);
     threadsTriangles = triangles;
 
+    for (auto &point : field.getPoints()) {
+        pPointsX.push_back(point.x);
+        pPointsY.push_back(point.y);
+        pPointsZ.push_back(point.z);
+    }
+
     // 2. Loop over each coordinate in the 3D grid.
     #pragma omp parallel for schedule(runtime) default(none) firstprivate(totalCubesCount, gridSize) shared(field) reduction(+:totalTriangles)
     for (size_t i = 0; i < totalCubesCount; ++i) {
@@ -64,13 +70,15 @@ float LoopMeshBuilder::evaluateFieldAt(const Vec3_t<float> &pos, const Parametri
 
     // 2. Find minimum square distance from points "pos" to any point in the
     //    field.
-    // #pragma omp parallel for schedule(runtime) default(none) firstprivate(count) reduction(min:value) shared(pPoints, pos)
+    const float *pointsX = pPointsX.data();
+    const float *pointsY = pPointsY.data();
+    const float *pointsZ = pPointsZ.data();
 
-#pragma omp simd reduction(min:value)
+    #pragma omp simd reduction(min:value)
     for (unsigned i = 0; i < count; ++i) {
-        float distanceSquared = (pos.x - pPoints[i].x) * (pos.x - pPoints[i].x);
-        distanceSquared += (pos.y - pPoints[i].y) * (pos.y - pPoints[i].y);
-        distanceSquared += (pos.z - pPoints[i].z) * (pos.z - pPoints[i].z);
+        float distanceSquared = (pos.x - pointsX[i]) * (pos.x - pointsX[i]);
+        distanceSquared += (pos.y - pointsY[i]) * (pos.y - pointsY[i]);
+        distanceSquared += (pos.z - pointsZ[i]) * (pos.z - pointsZ[i]);
 
         // Comparing squares instead of real distance to avoid unnecessary
         // "sqrt"s in the loop.

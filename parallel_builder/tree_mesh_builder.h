@@ -34,6 +34,9 @@ protected:
     std::vector<Vec3_t<float>> cutoff_box_indices;
     std::vector<float> box_widths_physical;
     std::vector<unsigned> totalThreadTriangles;
+    std::vector<float> pPointsX;
+    std::vector<float> pPointsY;
+    std::vector<float> pPointsZ;
 private:
     unsigned max_depth = static_cast<unsigned>(sqrt(mGridSize));
     unsigned cutoff_depth = 4;

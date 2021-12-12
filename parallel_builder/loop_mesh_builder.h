@@ -29,6 +29,9 @@ protected:
 
     std::vector<Triangle_t> mTriangles; ///< Temporary array of triangles
     std::vector<std::vector<Triangle_t>> threadsTriangles;
+    std::vector<float> pPointsX;
+    std::vector<float> pPointsY;
+    std::vector<float> pPointsZ;
 };
 
 #endif // LOOP_MESH_BUILDER_H
