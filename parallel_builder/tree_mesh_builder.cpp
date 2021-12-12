@@ -118,6 +118,7 @@ TreeMeshBuilder::marchCubesRecurse(const Vec3_t<float> &pos, const Vec3_t<float>
             }
         }
     }
+#pragma omp taskwait
 }
 
 float TreeMeshBuilder::evaluateFieldAt(const Vec3_t<float> &pos,
