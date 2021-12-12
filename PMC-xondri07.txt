@@ -48,81 +48,80 @@ který zajistí, že se nebude pokračovat, pokud se vytvořené tasky neprovedo
 
 2) Jakým způsobem jste realizovali sesbírání celkového počtu trojúhelníků?
 
-Všech 8 tasků má sdílenou proměnnou. V rámci kžadého tasku se návratová
-hodnota uloží do lokální proměnné a následně se přičte do sdílené proměnné.
-Toto uložení musí být provedeno atomicky.
+Trojúhelníky ukládá každé vlákno do svého pole, které se na konci sesypou
+do jediného pole. Celkový počet trojúhelníků je zjištěn voláním metody
+size() nad vektorem s trojúhelníky. Přičítat do proměnné není potřeba.
 
 3) Jaký vliv má na vaše řešení tzv. "cut-off"? Je vhodné vytvářet nový 
    task pro každou krychli na nejnižší úrovni?
 
 Nastavení cut-off zamezí příliš velkému množství vytvořených tasků, protože
 každý task přináší jistou režii. Při zanořování exponenciálně vzrůstá počet vytvořených
-tasků. Tudíž je vhodné omezit zahoření jen do určité úrovně. Pro moji
+tasků, tudíž je vhodné omezit zahoření jen do určité úrovně. Pro moji
 implementaci se jedná o hodnotu mGridSize / 2^4.
-
-Experimenty s ruznou velikosti cutoff pro různá rozližení:
-
-bun_zipper_res4
-cutoff = mGridSize / 2^0: 635, 634, 634
-cutoff = mGridSize / 2^1: 91, 91, 163
-cutoff = mGridSize / 2^2: 49, 240, 155, 90, 89
-cutoff = mGridSize / 2^3: 164, 300, 174, 40, 95
-cutoff = mGridSize / 2^4: 46, 235, 94, 207, 96
-cutoff = mGridSize / 2^5: 51, 156, 41, 108, 71
-cutoff = mGridSize / 2^6: 46, 72, 48, 48, 46
-
-bun_zipper_res2
-cutoff = mGridSize / 2^0: 11604
-cutoff = mGridSize / 2^1: 1756, 1544, 1754
-cutoff = mGridSize / 2^2: 380, 379, 388
-cutoff = mGridSize / 2^3: 359, 487, 362
-cutoff = mGridSize / 2^4: 349, 347, 349
-cutoff = mGridSize / 2^5: 388, 460, 516
-cutoff = mGridSize / 2^6: 410, 403, 424
-cutoff = mGridSize / 2^7: 425, 430, 403
-cutoff = mGridSize / 2^8: 394, 491, 402
-
-bun_zipper_res1
-cutoff = mGridSize / 2^2: 1650, 1632
-cutoff = mGridSize / 2^3: 1549, 1554
-cutoff = mGridSize / 2^4: 1502, 1500; po nahrazeni kriticke sekce 1476, 1466
-cutoff = mGridSize / 2^6: 1708, 1872
-cutoff = mGridSize / 2^5: 1688, 1788
-
-Nejlépe vycházi cutoff pro pro mGridSize / 2^4.
 
 4) Jakým způsobem zajišťujete ukládání trojúhelníků z několika vláken současně?
 
 Ukládání do vektoru trojúhelníku je označeno jako kritická sekce, která zabrání
 souběžnému přístupu dvou vláken do tohoto vektoru.
 
+Každé vlákno má své pole do kterého ukládá, tudíž není třeba řešit výlučný
+přístup do jediného pole. Na konci marchCubes se jednoduše trojúhelníky
+ze všech polí sjednotí do jediného vektoru.
+
 Úloha 3: Grafy škálování všech řešení
 ===============================================================================
 
 1) Stručně zhodnoťte efektivitu vytvořených řešení (na základě grafů škálování).
 
+U silného škálování je vidět, že pro počet jader větší než 2^4 algoritmy špatně škálují.
+Čas potřebný na provedení úlohy je s více jádry totožný či dokonce vyšší. Nejlepšího času
+dosahují algoritmy pro 16 jader.
+
+Z grafu škálování vzhledem k velikosti mřížky je vidět, že implemenatce Octree
+je pro menší mřížku pomalejší. Asi od velikosti mřížky 2^18 jsou implementace
+totožné a čas roste s velikostí mřížky přibližně lineárně.
+
 2) V jakém případě (v závislosti na počtu bodů ve vstupním souboru a velikosti 
    mřížky) bude vaše řešení 1. úlohy neefektivní? (pokud takový případ existuje)
 
+Řešení Loop nebude efektivní v případě malého vstupu a velkého počtu jader.
+
 3) Je (nebo není) stromový algoritmus efektivnější z pohledu slabého škálování 
    vzhledem ke vstupu?
+
+Je efektivnější z pohledu slabého škálování, ale jedná se pouze o těžce rozeznatelný rozdíl.
+O stromového algoritmu jsou linky pouze lehce více horizontální než o implementace loop.
 
 Úloha 4: Analýza využití jader pomocí VTune
 ================================================================================
 
 1) Jaké bylo průměrné využití jader pro všechny tři implementace s omezením na 
    18 vláken? Na kolik procent byly využity?
+Průměrné využití:
+   ref: 0.996
+   loop: 15.536
+   tree: 15.243
    
-   ref:
-   loop:
-   tree:
+Procentuální využití:
+   ref:   0.996 / 18 * 100 = 5.533 %
+   loop: 15.536 / 18 * 100 = 86.311 %
+   tree: 15.243 / 18 * 100 = 84,683 %
 
 2) Jaké bylo průměrné využití jader pro všechny tři implementace s využitím 
    všech jader? Na kolik procent se podařilo využít obě CPU?
    
-   ref:
-   loop:
-   tree:
+Průměrné využití:
+   ref: 0.996
+   loop: 22.253
+   tree: 21.229
+
+Procentuální využití:
+   ref:   2,8 %
+   loop: 62.8 %
+   tree: 59,4 %
 
 3) Jaké jsou závěry z těchto měření?
+
+Lepší využití dosáhneme při použití jednoho procesoru s 18 vlákny. 
 
